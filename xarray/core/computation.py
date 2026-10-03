@@ -1744,9 +1744,9 @@ def where(cond, x, y, keep_attrs=None):
     y : scalar, array, Variable, DataArray or Dataset
         values to choose from where `cond` is False
     keep_attrs : bool, str or callable, optional
-        How to combine attributes from the inputs, in ``cond``, ``x``, ``y``
-        order. If True, copy attributes from the first applicable xarray
-        object; if False, discard attributes. Strings specify a merge
+        If True, copy data attributes from ``x``; if False, discard attributes.
+        Strings and callables combine attributes from the inputs in
+        ``cond``, ``x``, ``y`` order. Strings specify a merge
         strategy ("override", "drop", "identical", "no_conflicts", or
         "drop_conflicts"). A callable receives a sequence of attribute
         dictionaries and a ``context`` keyword argument.
@@ -1816,8 +1816,11 @@ def where(cond, x, y, keep_attrs=None):
     Dataset.where, DataArray.where :
         equivalent methods
     """
+    if keep_attrs is None:
+        keep_attrs = _get_keep_attrs(default=False)
+
     # alignment for three arguments is complicated, so don't support it yet
-    return apply_ufunc(
+    result = apply_ufunc(
         duck_array_ops.where,
         cond,
         x,
@@ -1827,6 +1830,17 @@ def where(cond, x, y, keep_attrs=None):
         dask="allowed",
         keep_attrs=keep_attrs,
     )
+
+    if keep_attrs is True:
+        from .dataset import Dataset
+
+        if hasattr(result, "attrs"):
+            result.attrs = getattr(x, "attrs", {})
+        if isinstance(result, Dataset):
+            for name in result.data_vars:
+                source = x[name] if isinstance(x, Dataset) else x
+                result[name].attrs = getattr(source, "attrs", {})
+    return result
 
 
 def polyval(coord, coeffs, degree_dim="degree"):
