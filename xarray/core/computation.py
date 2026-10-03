@@ -1744,7 +1744,10 @@ def where(cond, x, y, keep_attrs=None):
     y : scalar, array, Variable, DataArray or Dataset
         values to choose from where `cond` is False
     keep_attrs : bool, str or callable, optional
-        If True, copy data attributes from ``x``; if False, discard attributes.
+        If True, copy data attributes from ``x`` if it is an xarray object,
+        otherwise from ``y`` if it is an xarray object. An empty attribute
+        dictionary on ``x`` still takes precedence over ``y``.
+        If False, discard attributes.
         Strings and callables combine attributes from the inputs in
         ``cond``, ``x``, ``y`` order. Strings specify a merge
         strategy ("override", "drop", "identical", "no_conflicts", or
@@ -1832,14 +1835,19 @@ def where(cond, x, y, keep_attrs=None):
     )
 
     if keep_attrs is True:
+        from .dataarray import DataArray
         from .dataset import Dataset
 
+        xarray_types = (DataArray, Dataset, Variable)
+        source = x if isinstance(x, xarray_types) else y
+        if not isinstance(source, xarray_types):
+            source = None
         if hasattr(result, "attrs"):
-            result.attrs = getattr(x, "attrs", {})
+            result.attrs = getattr(source, "attrs", {})
         if isinstance(result, Dataset):
             for name in result.data_vars:
-                source = x[name] if isinstance(x, Dataset) else x
-                result[name].attrs = getattr(source, "attrs", {})
+                variable = source[name] if isinstance(source, Dataset) else source
+                result[name].attrs = getattr(variable, "attrs", {})
     return result
 
 
